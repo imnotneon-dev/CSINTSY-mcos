@@ -1,13 +1,14 @@
 import csv
 import pickle
 import os
+import re
 from typing import List, Tuple
 from sklearn.feature_extraction.text import TfidfVectorizer
 # --- Change this line: ---
 from sklearn.naive_bayes import MultinomialNB
 # -------------------------
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, accuracy_score
 
 # Define file paths (MODEL_PATH and VECTORIZER_PATH remain the same)
 MODEL_PATH = 'pinoybot_model.pkl'
@@ -38,7 +39,7 @@ def load_data_from_csv(data_path: str) -> Tuple[List[str], List[str]]:
                     primary_tag = row[3].upper() # Read tag and uppercase it
 
                     if primary_tag in TARGET_LABELS and word:
-                        X_words.append(word.lower())
+                        X_words.append(preprocess_word(word))
                         y_tags.append(primary_tag)
 
     except FileNotFoundError:
@@ -65,12 +66,29 @@ def create_and_save_model(data_path='final_annotations.csv'):
     )
     X_features = vectorizer.fit_transform(X_words)
 
-    # --- 3. TRAIN/TEST SPLIT AND MODEL TRAINING (70/30 for now) ---
-    X_train, X_test, y_train, y_test = train_test_split(
+# --- 3. TRAIN/VALIDATION/TEST SPLIT (70/15/15) ---
+    X_train, X_temp, y_train, y_temp = train_test_split(
         X_features, y_tags, test_size=0.30, random_state=42, stratify=y_tags
     )
-    
-    model = MultinomialNB(alpha=1.0)
+    X_val, X_test, y_val, y_test = train_test_split(
+        X_temp, y_temp, test_size=0.50, random_state=42, stratify=y_temp
+    )
+
+   # Hyperparameter tuning (alpha)
+    best_alpha, best_acc = 1.0, 0
+    for alpha in [0.1, 0.5, 1.0, 2.0]:
+        model = MultinomialNB(alpha=alpha)
+        model.fit(X_train, y_train)
+        y_val_pred = model.predict(X_val)
+        acc = accuracy_score(y_val, y_val_pred)
+        print(f"Alpha={alpha:.1f} | Validation Accuracy={acc:.4f}")
+        if acc > best_acc:
+            best_alpha, best_acc = alpha, acc
+
+    print(f"\n✅ Best alpha found: {best_alpha} (Val Accuracy={best_acc:.4f})")
+
+    # Train final model
+    model = MultinomialNB(alpha=best_alpha)
     model.fit(X_train, y_train)
 
     # --- 4. EVALUATION ---
