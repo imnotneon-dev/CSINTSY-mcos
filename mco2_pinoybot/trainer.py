@@ -4,7 +4,9 @@ import os
 import re
 from typing import List, Tuple
 from sklearn.feature_extraction.text import TfidfVectorizer
+# --- Change this line: ---
 from sklearn.naive_bayes import MultinomialNB
+# -------------------------
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, accuracy_score
 
@@ -37,7 +39,7 @@ def load_data_from_csv(data_path: str) -> Tuple[List[str], List[str]]:
                     primary_tag = row[3].upper() # Read tag and uppercase it
 
                     if primary_tag in TARGET_LABELS and word:
-                        X_words.append(preprocess_word(word))
+                        X_words.append(word.lower())
                         y_tags.append(primary_tag)
 
     except FileNotFoundError:
