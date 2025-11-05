@@ -4,9 +4,7 @@ import os
 import re
 from typing import List, Tuple
 from sklearn.feature_extraction.text import TfidfVectorizer
-# --- Change this line: ---
 from sklearn.naive_bayes import MultinomialNB
-# -------------------------
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, accuracy_score
 
