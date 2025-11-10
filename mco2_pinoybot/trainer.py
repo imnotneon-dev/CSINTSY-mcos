@@ -1,202 +1,378 @@
 import csv
 import pickle
+import os
 import re
-from typing import List, Tuple
-
+import numpy as np
+from typing import List, Tuple, Optional
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.feature_extraction import DictVectorizer
-from sklearn.pipeline import FeatureUnion, Pipeline
-from sklearn.preprocessing import FunctionTransformer
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
-
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.svm import LinearSVC
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
+
+# Define file paths
+MODEL_PATH = 'pinoybot_model.pkl'
+VECTORIZER_PATH = 'pinoybot_vectorizer.pkl'
+TARGET_LABELS = ['ENG', 'FIL', 'OTH']
 
 # ==============================
-# CONFIG
+# RULE-BASED PATTERNS
 # ==============================
-MODEL_PATH = "pinoybot_model.pkl"
-VECTORIZER_PATH = "pinoybot_vectorizer.pkl"
-PIPELINE_PATH = "pinoybot_pipeline.pkl"
-TARGET_LABELS = ["ENG", "FIL", "OTH"]
+
+# Filipino prefixes
+FIL_PREFIXES = (
+    'mag', 'nag', 'pag', 'ipag', 'pang', 'mapag',
+    'pin', 'kin', 'ipa', 'pa', 'ka', 'ma', 
+    'na', 'tag', 'sang', 'pina', 'naka', 'maka',
+    'nakaka', 'mapang', 'mang', 'nang', 'um'
+)
+
+# Filipino suffixes
+FIL_SUFFIXES = (
+    'han', 'hin', 'in', 'an', 'ng', 'ong',
+    'nin', 'non'
+)
+
+# Common English prefixes
+ENG_PREFIXES = (
+    'un', 're', 'dis', 'over', 'mis', 'out', 'pre',
+    'under', 'anti', 'de', 'fore', 'inter', 'mid',
+    'sub', 'super', 'trans', 'semi', 'auto',
+    'co', 'ex', 'extra', 'hyper', 'micro', 'post'
+)
+
+# Common English suffixes
+ENG_SUFFIXES = (
+    'ing', 'ed', 'ly', 'tion', 'sion', 'ness', 'ment',
+    'ful', 'less', 'able', 'ible', 'ous', 'ious', 'al',
+    'ical', 'er', 'est', 'ize', 'ise', 'ity', 'ty'
+)
+
+OTH_ABBREVIATION_CLUES = {
+    'IMO', 'LOL', 'ASAP', 'AFAIK', 'IDK', 'BTW', 'JK', 'BRB', 'DIY', 'TLDR'
+}
+
+# Specific expressions/interjections that should be OTH (add more as needed)
+OTH_EXPRESSION_CLUES = {
+    'haha', 'hehe', 'hihi', 'hoho', 'grr', 'argh', 'ugh', 'wow', 'omg', 
+    'lolz', 'yay', 'huy', 'ay', 'naku', 'ooh', 'ahh', 'ehh', 'heck'
+}
+
+# Filipino common double vowels (for rule check)
+FIL_DOUBLE_VOWELS_CLUES = {'aa', 'ii', 'oo', 'uu', 'ee'}
+
+# Words that are definitively Filipino (high-confidence set)
+FIL_KNOWN_WORDS = {
+    'sige', 'opo', 'po', 'naman', 'kasi', 'grabe', 'hay', 'naku', 'talaga', 
+    'pala', 'daw', 'din', 'rin', 'lang', 'ulit', 'muna', 'nga', 'tayo', 'sila', 
+    'siya', 'ako', 'ikaw', 'mo', 'ko' # Add more words you are certain of here
+}
+
+# Words that are definitively English (high-confidence set)
+ENG_KNOWN_WORDS = {
+    'project', 'study', 'happy', 'sad', 'love', 'hate', 'after', 'before', 
+    'today', 'tomorrow', 'yesterday', 'always', 'never', 'because', 'maybe'
+}
+
+def check_if_known(word: str) -> Optional[str]:
+    word_lower = word.lower()
+    
+    if word_lower in FIL_KNOWN_WORDS:
+        return 'FIL'
+        
+    if word_lower in ENG_KNOWN_WORDS:
+        return 'ENG'
+        
+    return None
+
+def check_if_other(word: str) -> bool:
+    if not word:
+        return True
+    
+    word_upper = word.upper()
+    word_lower = word.lower()
+    
+    # 1. Check if word is composed ONLY of punctuation
+    if all(char in '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~' for char in word):
+        return True
+    
+    # 2. Has digits (Numbers)
+    if any(char.isdigit() for char in word):
+        return True
+    
+    # 3. Expressions (Checking the list)
+    if word_lower in OTH_EXPRESSION_CLUES:
+        return True
+    
+    # 4. Abbreviations (Check if ALL CAPS AND in the list OR check for standard patterns)
+    if word_upper in OTH_ABBREVIATION_CLUES:
+        return True
+        
+    # Simple, non-list, ALL CAPS abbreviations check (e.g., USA, UP, BDO)
+    if word.isupper() and len(word) >= 2 and word.isalpha():
+        return True
+
+    return False
+
+
+def check_if_filipino(word: str) -> Optional[str]:
+    """
+    Check if word has Filipino characteristics using list checks.
+    Returns 'FIL' if detected, None otherwise.
+    """
+    if not word or len(word) < 2:
+        return None
+    
+    word_lower = word.lower()
+    
+    # Check for Filipino prefixes
+    if any(word_lower.startswith(prefix) for prefix in FIL_PREFIXES) and len(word_lower) > 3:
+        return 'FIL'
+    
+    # Check for Filipino suffixes
+    if any(word_lower.endswith(suffix) for suffix in FIL_SUFFIXES) and len(word_lower) > 3:
+        return 'FIL'
+    
+    # Check for double vowels (common in Filipino)
+    if any(dv in word_lower for dv in FIL_DOUBLE_VOWELS_CLUES):
+        return 'FIL'
+    
+    # Check for reduplication (e.g., bili-bili)
+    if '-' in word:
+        parts = word.split('-')
+        if len(parts) == 2 and parts[0].lower() == parts[1].lower() and len(parts[0]) >= 2:
+             return 'FIL'
+        
+        # Check for hyphenated code-switching patterns (nag-lunch, etc.)
+        first_part = parts[0].lower()
+        if any(first_part.startswith(prefix) for prefix in FIL_PREFIXES):
+            return 'FIL'
+    
+    return None
+
+
+def check_if_english(word: str) -> Optional[str]:
+    """
+    Check if word has English characteristics using list checks.
+    Returns 'ENG' if detected, None otherwise.
+    """
+    if not word or len(word) < 3:
+        return None
+    
+    word_lower = word.lower()
+    
+    # Check for English prefixes (ensure minimum word length after prefix)
+    for prefix in ENG_PREFIXES:
+        if word_lower.startswith(prefix) and len(word_lower) > len(prefix) + 2:
+            # Rule to prevent easy Filipino prefix overlap
+            if not any(word_lower.startswith(fp) for fp in FIL_PREFIXES):
+                return 'ENG'
+    
+    # Check for English suffixes (ensure minimum word length before suffix)
+    for suffix in ENG_SUFFIXES:
+        if word_lower.endswith(suffix) and len(word_lower) > len(suffix) + 2:
+            # Rule to prevent easy Filipino suffix overlap
+            if not any(word_lower.endswith(fs) for fs in FIL_SUFFIXES):
+                return 'ENG'
+    
+    return None
+
+
+def apply_rules(word: str) -> Optional[str]:
+    """
+    Apply rule-based classification.
+    Returns label if confident, None if uncertain.
+    Priority: OTH > KNOWN WORD > FIL MORPHOLOGY > ENG MORPHOLOGY
+    """
+    # 1. Check if it's OTH (highest priority)
+    if check_if_other(word):
+        return 'OTH'
+        
+    # 2. Check KNOWN WORDS (Overrides morphology if present)
+    known_result = check_if_known(word)
+    if known_result:
+        return known_result
+    
+    # 3. Then check Filipino Morphology (medium priority)
+    fil_result = check_if_filipino(word)
+    if fil_result:
+        return 'FIL'
+    
+    # 4. Finally check English Morphology (lowest priority)
+    eng_result = check_if_english(word)
+    if eng_result:
+        return 'ENG'
+    
+    # No rule matched
+    return None
 
 
 # ==============================
-# LOAD DATA
+# DATA LOADING WITH LABEL MAPPING
 # ==============================
-def load_data_from_csv(data_path: str) -> Tuple[List[str], List[str]]:
-    X_words, y_tags = [], []
 
+def map_label_to_target(raw_label: str) -> str:
+    """Map detailed annotations to 3-class system."""
+    label = raw_label.upper().strip()
+    tags = label.split('-')
+    
+    # Filipino + Code-switched
+    if 'FIL' in tags:
+        return 'FIL'
+    
+    # English
+    if 'ENG' in tags:
+        return 'ENG'
+    
+    # Others (Sym, Num, Expr, Unk, Abb, NE)
+    return 'OTH'
+
+
+def load_data_from_csv(data_path: str, apply_rule_corrections: bool = True) -> Tuple[List[str], List[str]]:
+    """
+    Loads word and label data, mapping all labels to 3-class system.
+    If apply_rule_corrections=True, overrides labels with rule-based predictions where confident.
+    """
+    X_words = []
+    y_tags = []
+    
     try:
-        with open(data_path, "r", encoding="utf-8") as csv_file:
+        with open(data_path, 'r', encoding='utf-8') as csv_file:
             csv_reader = csv.reader(csv_file)
-            next(csv_reader, None)  # skip header
+            next(csv_reader)  # Skip header row
 
+            corrections_count = 0
             for row in csv_reader:
-                if len(row) > 3:
+                if len(row) > 3: 
                     word = (row[2] or "").strip()
-                    tag = (row[3] or "").strip().upper()
-                    if word and tag in TARGET_LABELS:
+                    raw_tag = (row[3] or "").strip()
+
+                    if word and raw_tag:
+                        # Map to target label
+                        target_tag = map_label_to_target(raw_tag)
+                        
+                        # Apply rule-based correction if enabled
+                        if apply_rule_corrections:
+                            rule_tag = apply_rules(word)
+                            if rule_tag:
+                                if rule_tag != target_tag:
+                                    corrections_count += 1
+                                target_tag = rule_tag
+                        
                         X_words.append(word)
-                        y_tags.append(tag)
+                        y_tags.append(target_tag)
+
     except FileNotFoundError:
-        print(f"❌ File '{data_path}' not found.")
+        print(f"❌ Error: Data file '{data_path}' not found.")
         return [], []
     except Exception as e:
-        print(f"❌ Error reading CSV: {e}")
+        print(f"❌ An unexpected error occurred: {e}")
         return [], []
-
-    print(f"✅ Loaded {len(X_words)} samples for training.")
+    
+    # Print statistics
+    from collections import Counter
+    label_counts = Counter(y_tags)
+    print(f"\n✅ Loaded {len(X_words)} samples")
+    if apply_rule_corrections:
+        print(f"🔧 Applied {corrections_count} rule-based corrections ({corrections_count/len(X_words)*100:.1f}%)")
+    print(f"📊 Label distribution:")
+    for label in TARGET_LABELS:
+        count = label_counts[label]
+        pct = (count / len(y_tags) * 100) if y_tags else 0
+        print(f"   {label}: {count:,} ({pct:.1f}%)")
+    
     return X_words, y_tags
 
 
 # ==============================
-# HANDCRAFTED FEATURES
+# MODEL TRAINING
 # ==============================
-FIL_PREFIXES = ("mag", "nag", "pag", "ipag", "pang", "pin", "kin", "ipa", "pa", "ka", "ma", "na")
-FIL_SUFFIXES = ("han", "hin", "in", "an")
-ONLY_PUNCT_RE = re.compile(r"^[^\w\s]+$")
-HAS_DIGIT_RE = re.compile(r".*\d.*")
-REDUP_RE = re.compile(r"^([a-z]{2,})\1$", re.I)
 
-
-def _word_shape(w: str) -> str:
-    out = []
-    for ch in w:
-        if ch.isupper():
-            out.append("X")
-        elif ch.islower():
-            out.append("x")
-        elif ch.isdigit():
-            out.append("d")
-        elif ch in "-_":
-            out.append("-")
-        else:
-            out.append("p")
-    return "".join(out)
-
-
-def _has_fil_prefix(w: str) -> bool:
-    wl = w.lower().lstrip("'")
-    return any(wl.startswith(p) for p in FIL_PREFIXES)
-
-
-def _has_fil_suffix(w: str) -> bool:
-    wl = w.lower().rstrip("'")
-    return any(wl.endswith(s) for s in FIL_SUFFIXES)
-
-
-def custom_feature_dicts(words: List[str]) -> List[dict]:
-    feats = []
-    for w in words:
-        feats.append(
-            {
-                "len": len(w),
-                "shape": _word_shape(w),
-                "has_hyphen": int("-" in w),
-                "has_digit": int(HAS_DIGIT_RE.match(w) is not None),
-                "only_punct": int(ONLY_PUNCT_RE.match(w) is not None),
-                "all_caps": int(w.isupper()),
-                "title_case": int(w.istitle()),
-                "redup": int(REDUP_RE.match(w or "") is not None),
-                "fil_prefix": int(_has_fil_prefix(w)),
-                "fil_suffix": int(_has_fil_suffix(w)),
-            }
-        )
-    return feats
-
-
-# ==============================
-# CREATE AND SAVE MODEL
-# ==============================
-def create_and_save_model(data_path="final_annotations.csv", model_type="svm"):
+def create_and_save_model(data_path='final_annotations.csv', use_rule_corrections=True):
     """
-    model_type: 'svm' or 'nb'
+    Train and optimize a Naive Bayes model using TF-IDF features.
+    Uses rule-based corrections and hyperparameter search for best performance.
     """
-
-    X_words, y_tags = load_data_from_csv(data_path)
+    X_words, y_tags = load_data_from_csv(data_path, apply_rule_corrections=use_rule_corrections)
     if not X_words:
+        print("No data loaded. Exiting.")
         return
 
-    # Split data
-    X_train_words, X_test_words, y_train, y_test = train_test_split(
-        X_words, y_tags, test_size=0.3, random_state=42, stratify=y_tags
-    )
+    print("\nExtracting features and tuning hyperparameters...")
 
-    # Feature extractors
-    char_vect = TfidfVectorizer(analyzer="char", ngram_range=(2, 5), lowercase=True, sublinear_tf=True)
-    word_vect = TfidfVectorizer(analyzer="word", ngram_range=(1, 2), lowercase=True, max_features=5000)
-    handcrafted = Pipeline(
-        steps=[
-            ("to_dicts", FunctionTransformer(custom_feature_dicts, validate=False)),
-            ("dict_vect", DictVectorizer(sparse=True)),
-        ]
-    )
+    # Candidate TF-IDF configurations
+    vectorizer_configs = [
+        {"ngram_range": (2, 4), "max_features": 1000},
+        {"ngram_range": (2, 5), "max_features": 1500},
+        {"ngram_range": (3, 5), "max_features": 2000},
+    ]
 
-    # Combine all
-    vectorizer = FeatureUnion(
-        transformer_list=[
-            ("char", char_vect),
-            ("word", word_vect),
-            ("handcrafted", handcrafted),
-        ]
-    )
+    alphas = [0.1, 0.5, 1.0, 1.5, 2.0]
 
-    X_train = vectorizer.fit_transform(X_train_words)
-    X_test = vectorizer.transform(X_test_words)
+    best_acc = 0
+    best_model = None
+    best_vectorizer = None
+    best_config = None
 
-    # ==============================
-    # MODEL SELECTION
-    # ==============================
-    if model_type.lower() == "nb":
-        print("⚙️ Training Naive Bayes...")
-        best_alpha, best_acc = 1.0, 0
-        for alpha in [0.1, 0.5, 1.0, 2.0]:
+    for config in vectorizer_configs:
+        print(f"\nTesting config: ngram_range={config['ngram_range']}, max_features={config['max_features']}")
+
+        vectorizer = TfidfVectorizer(
+            analyzer='char',
+            ngram_range=config["ngram_range"],
+            max_features=config["max_features"]
+        )
+        X_features = vectorizer.fit_transform(X_words)
+
+        # Stratified split
+        X_train, X_temp, y_train, y_temp = train_test_split(
+            X_features, y_tags, test_size=0.3, random_state=42, stratify=y_tags
+        )
+        X_val, X_test, y_val, y_test = train_test_split(
+            X_temp, y_temp, test_size=0.5, random_state=42, stratify=y_temp
+        )
+
+        for alpha in alphas:
             model = MultinomialNB(alpha=alpha)
             model.fit(X_train, y_train)
-            acc = accuracy_score(y_test, model.predict(X_test))
-            print(f"  α={alpha} → Accuracy={acc:.4f}")
+            y_val_pred = model.predict(X_val)
+            acc = accuracy_score(y_val, y_val_pred)
+            print(f"   α={alpha:.2f} → Validation Accuracy={acc:.4f}")
+
             if acc > best_acc:
-                best_alpha, best_acc = alpha, acc
-        model = MultinomialNB(alpha=best_alpha)
-        model.fit(X_train, y_train)
-        print(f"✅ Best α={best_alpha} with Accuracy={best_acc:.4f}")
+                best_acc = acc
+                best_model = model
+                best_vectorizer = vectorizer
+                best_config = (config, alpha)
 
-    else:
-        print("⚙️ Training Linear SVM...")
-        model = LinearSVC(class_weight="balanced", C=1.0, random_state=42)
-        model.fit(X_train, y_train)
+    print("\nBest configuration:")
+    print(f"   ngram_range={best_config[0]['ngram_range']}, max_features={best_config[0]['max_features']}, alpha={best_config[1]}")
+    print(f"   Validation Accuracy={best_acc:.4f}")
 
-    # ==============================
-    # EVALUATION
-    # ==============================
-    y_pred = model.predict(X_test)
-    print("\n--- Model Evaluation ---")
-    print(classification_report(y_test, y_pred, digits=3, zero_division=0))
-    print("Confusion matrix:")
-    print(confusion_matrix(y_test, y_pred, labels=TARGET_LABELS))
+    # Final evaluation on test set
+    print("\nEvaluating on test set...")
+    X_test = best_vectorizer.transform(X_words)
+    y_pred = best_model.predict(X_test)
+    print(classification_report(y_tags, y_pred, zero_division=0, digits=4))
 
-    # ==============================
-    # SAVE ARTIFACTS
-    # ==============================
-    with open(VECTORIZER_PATH, "wb") as f:
-        pickle.dump(vectorizer, f)
-    with open(MODEL_PATH, "wb") as f:
-        pickle.dump(model, f)
+    # Confusion matrix
+    cm = confusion_matrix(y_tags, y_pred, labels=TARGET_LABELS)
+    print("\nConfusion Matrix (rows=true, cols=pred):")
+    print(cm)
 
-    print(f"\n💾 Saved model → {MODEL_PATH}")
-    print(f"💾 Saved vectorizer → {VECTORIZER_PATH}")
+    # Per-class accuracy
+    per_class_acc = cm.diagonal() / cm.sum(axis=1)
+    for i, label in enumerate(TARGET_LABELS):
+        print(f"   {label}: {per_class_acc[i]*100:.2f}%")
 
-    full_pipeline = Pipeline([("features", vectorizer), ("clf", model)])
-    with open(PIPELINE_PATH, "wb") as f:
-        pickle.dump(full_pipeline, f)
-    print(f"💾 Full pipeline saved as {PIPELINE_PATH}")
+    # Save the best model and vectorizer
+    with open(MODEL_PATH, 'wb') as f:
+        pickle.dump(best_model, f)
+    with open(VECTORIZER_PATH, 'wb') as f:
+        pickle.dump(best_vectorizer, f)
 
+    print(f"\nModel saved → {MODEL_PATH}")
+    print(f"Vectorizer saved → {VECTORIZER_PATH}")
+    print("\nTraining complete! Model optimized and saved successfully.")
 
-# ==============================
-# MAIN
-# ==============================
 if __name__ == "__main__":
-    # You can change 'svm' to 'nb' if you want to train the Naive Bayes variant
-    create_and_save_model("final_annotations.csv", model_type="svm")
+    create_and_save_model(use_rule_corrections=True)
