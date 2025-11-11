@@ -68,8 +68,9 @@ FIL_KNOWN_WORDS = {
 }
 
 # Words that are definitively English (high-confidence set)
+# nilagay ko is and a dito 
 ENG_KNOWN_WORDS = {
-    'project', 'study', 'happy', 'sad', 'love', 'hate', 'after', 'before', 
+    'project', 'is', 'a', 'study', 'happy', 'sad', 'love', 'hate', 'after', 'before', 
     'today', 'tomorrow', 'yesterday', 'always', 'never', 'because', 'maybe'
 }
 
@@ -88,11 +89,17 @@ def check_if_other(word: str) -> bool:
     if not word:
         return True
     
+    # removes leading&trailing characters 
+    word = word.strip()
+    if not word:
+        return True
+    
     word_upper = word.upper()
     word_lower = word.lower()
     
     # 1. Check if word is composed ONLY of punctuation
-    if all(char in '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~' for char in word):
+    # isalnum() checks if all characters are alphanumeric hehe
+    if not any(ch.isalnum() for ch in word):
         return True
     
     # 2. Has digits (Numbers)
@@ -183,6 +190,14 @@ def apply_rules(word: str) -> Optional[str]:
     Returns label if confident, None if uncertain.
     Priority: OTH > KNOWN WORD > FIL MORPHOLOGY > ENG MORPHOLOGY
     """
+    # ADDED
+    if not word:
+        return None
+    
+    word = word.strip()
+    if not word:
+        return None
+    
     # 1. Check if it's OTH (highest priority)
     if check_if_other(word):
         return 'OTH'
