@@ -12,6 +12,7 @@ import os
 import pickle
 import numpy as np
 from typing import List, Any
+from trainer import apply_rules
 
 # define file paths (just constant strings here)
 MODEL_PATH = 'pinoybot_model.pkl'
@@ -68,64 +69,74 @@ def tag_language(tokens: List[str]) -> List[str]:
 
     if not tokens:
         return []
+    
+    # to store results
+    predicted_tags = []
+    model_tokens = []        # Tokens sent to the model
+    model_features = None    # TF-IDF vectors
+    model_predictions = []   # Model’s predicted labels
 
+    # apply rules first (from trainer.py)
+    for token in tokens:
+        rule_tag = apply_rules(token)
+
+        # confident rule classification
+        if rule_tag in ('OTH', 'FIL', 'ENG'):
+            predicted_tags.append(rule_tag)
+        else:
+            # model handles uncertain tags
+            model_tokens.append(token)
+            predicted_tags.append(None)  # placeholder
+    
     # 2. Extract features from the input tokens to create the feature matrix
     #    Example: features = ... (your feature extraction logic here)
-
-    tokens_lower = [t.lower() for t in tokens]
-    features = _VECTORIZER.transform(tokens_lower)
-
+    # predictions for remaining tokens
     
-    # debugging purposes: show active features for each token
-    predicted_tags = _MODEL.predict(features)
-    np.set_printoptions(threshold=np.inf, linewidth=np.inf)
-    
-    features_dense = features.toarray() 
-    feature_names = _VECTORIZER.get_feature_names_out()
-    
-    print("\n--- Feature Analysis (Active N-Grams and Predictions) ---")
-    print(f"Total Words Tested: {len(tokens)}")
-    print(f"Total Features Learned: {len(feature_names)}\n")
+    if model_tokens:
+        tokens_lower = [t.lower() for t in tokens]
+        features = _VECTORIZER.transform(tokens_lower)
+        model_predictions = _MODEL.predict(features)
 
-    for word, vector, tag in zip(tokens, features_dense, predicted_tags):
-        non_zero_indices = np.nonzero(vector)[0]
-        
-        print(f"=========================================================")
-        print(f"| TOKEN: '{word}' | PREDICTED CLASS: {tag}")
-        print(f"=========================================================")
-        
-        if len(non_zero_indices) == 0:
-            print("  [No active features found among the 1000 learned N-grams.]")
-        else:
-            print("  [Active Features (N-Grams) and their TF-IDF Scores]:")
-            
+        # Fill in predictions where rule_tag was None
+        pred_index = 0
+        for i in range(len(predicted_tags)):
+            if predicted_tags[i] is None:
+                predicted_tags[i] = model_predictions[pred_index]
+                pred_index += 1
 
-            for i in non_zero_indices:
-                feature_name = feature_names[i]
-                feature_score = vector[i]
-                print(f"  -> '{feature_name}' (Score: {feature_score:.4f})")
-                
-    print("-------------------------------------------------\n")
+        # debugging purposes: show active features for each token
+        np.set_printoptions(threshold=np.inf, linewidth=np.inf)
+        features_dense = features.toarray()
+        feature_names = _VECTORIZER.get_feature_names_out()
+
+        print("\n--- Feature Analysis (Active N-Grams and Predictions) ---")
+        print(f"Total Words Tested: {len(tokens)}")
+        print(f"Total Features Learned: {len(feature_names)}\n")
+
+        for word, vector, tag in zip(tokens, features_dense, predicted_tags):
+            non_zero_indices = np.nonzero(vector)[0]
+
+            print("=========================================================")
+            print(f"| TOKEN: '{word}' | PREDICTED CLASS: {tag}")
+            print("=========================================================")
+
+            if len(non_zero_indices) == 0:
+                print("  [No active features found among the learned N-grams.]")
+            else:
+                print("  [Active Features (N-Grams) and their TF-IDF Scores]:")
+                for i in non_zero_indices:
+                    feature_name = feature_names[i]
+                    feature_score = vector[i]
+                    print(f"  -> '{feature_name}' (Score: {feature_score:.4f})")
+
+        print("-------------------------------------------------\n")
+        np.set_printoptions(threshold=1000, linewidth=75)
     
-    np.set_printoptions(threshold=1000, linewidth=75) 
-    
-
-    # 3. Use the model to predict the tags for each token
-    #    Example: predicted = model.predict(features)
-
     predicted = _MODEL.predict(features)
-
-    # 4. Convert the predictions to a list of strings ("ENG", "FIL", or "OTH")
-    #    Example: tags = [str(tag) for tag in predicted]
-
-    # 5. Return the list of tags
-    #    return tags
-
-    # You can define other functions, import new libraries, or add other Python files as needed, as long as
-    # the tag_language function is retained and correctly accomplishes the expected task.
-
-    # Currently, the bot just tags every token as FIL. Replace this with your more intelligent predictions.
-    return predicted.tolist()
+    # Convert numpy string objects to normal Python strings
+    predicted_tags = [str(tag) for tag in predicted_tags]
+    
+    return predicted_tags
 
 if __name__ == "__main__":
     _load_resources()
