@@ -20,7 +20,7 @@ TARGET_LABELS = ['ENG', 'FIL', 'OTH']
 
 # Filipino prefixes
 FIL_PREFIXES = (
-    'mag', 'nag', 'pag', 'ipag', 'pang', 'mapag',
+    'ipag', 'pang', 'mapag',
     'pin', 'kin', 'ipa', 'pa', 'ka', 'ma', 
     'na', 'tag', 'sang', 'pina', 'naka', 'maka',
     'nakaka', 'mapang', 'mang', 'nang', 'um'
@@ -47,6 +47,8 @@ ENG_SUFFIXES = (
     'ical', 'er', 'est', 'ize', 'ise', 'ity', 'ty'
 )
 
+MIN_ROOT_LEN = 3
+
 #letters not found in fil?
 ENG_STRONG_LETTERS = set("qxz")        #like MOST LIKELY ENGLISH
 ENG_SOFT_LETTERS   = set("vfjc")       #MIGHT APPEAR IN FIL WORDS
@@ -63,7 +65,7 @@ OTH_EXPRESSION_CLUES = {
 }
 
 # Filipino common double vowels (for rule check)
-FIL_DOUBLE_VOWELS_CLUES = {'aa', 'ii', 'oo', 'uu', 'ee'}
+FIL_DOUBLE_VOWELS_CLUES = {'aa', 'ii', 'uu'}
 
 # Words that are definitively Filipino (high-confidence set)
 FIL_KNOWN_WORDS = {
@@ -131,41 +133,59 @@ def check_if_filipino(word: str) -> Optional[str]:
     Check if word has Filipino characteristics using list checks.
     Returns 'FIL' if detected, None otherwise.
     """
-    if not word or len(word) < 2:
+    if not word:
         return None
     
     word_lower = word.lower()
     
+    # Check for hyphenated words (reduplication or code-switch)
+    if '-' in word:
+        parts = word.split('-')
+        if len(parts) == 2:
+            first, second = parts[0].lower(), parts[1].lower()
+            
+            # Reduplication (bili-bili)
+            if first == second and len(first) >= 2:
+                return 'FIL'
+            
+            # Detect code-switched: FIL prefix + English root
+            is_second_eng = check_if_english(second) or check_if_english_letters(second)
+            
+            if is_second_eng:
+                return 'OTH'
+            
+            # If both parts are Filipino-ish, then FIL
+            if not is_second_eng:
+                return 'FIL'
+
     # Check for Filipino prefixes
-    if any(word_lower.startswith(prefix) for prefix in FIL_PREFIXES) and len(word_lower) > 3:
-        return 'FIL'
+    for prefix in FIL_PREFIXES:
+        if word_lower.startswith(prefix) and len(word_lower) > len(prefix) + MIN_ROOT_LEN:
+            root = word_lower[len(prefix):]
+            # If root looks English → code-switch → OTH
+            if check_if_english(root) or check_if_english_letters(root):
+                return 'OTH'
+            # Otherwise → FIL
+            return 'FIL'
     
     # Check for Filipino suffixes
-    if any(word_lower.endswith(suffix) for suffix in FIL_SUFFIXES) and len(word_lower) > 3:
-        return 'FIL'
+    for suffix in FIL_SUFFIXES:
+        if word_lower.endswith(suffix) and len(word_lower) > len(suffix) + MIN_ROOT_LEN:
+            root = word_lower[:-len(suffix)]
+            if check_if_english(root) or check_if_english_letters(root):
+                return 'OTH'
+            return 'FIL'
     
     # Check for double vowels (common in Filipino)
     if any(dv in word_lower for dv in FIL_DOUBLE_VOWELS_CLUES):
         return 'FIL'
-    
-    # Check for reduplication (e.g., bili-bili)
-    if '-' in word:
-        parts = word.split('-')
-        if len(parts) == 2 and parts[0].lower() == parts[1].lower() and len(parts[0]) >= 2:
-             return 'FIL'
-        
-        # Check for hyphenated code-switching patterns (nag-lunch, etc.)
-        first_part = parts[0].lower()
-        if any(first_part.startswith(prefix) for prefix in FIL_PREFIXES):
-            return 'FIL'
-    
-    return None
+
 
 def check_if_english_letters(word: str) -> Optional[str]:
  
     # Returns 'ENG' if confident.
  
-    if not word or len(word) < 2:
+    if not word:
         return None
 
     w = word.lower()
@@ -307,19 +327,19 @@ def load_data_from_csv(data_path: str, apply_rule_corrections: bool = True) -> T
                         y_tags.append(target_tag)
 
     except FileNotFoundError:
-        print(f"❌ Error: Data file '{data_path}' not found.")
+        print(f"Error: Data file '{data_path}' not found.")
         return [], []
     except Exception as e:
-        print(f"❌ An unexpected error occurred: {e}")
+        print(f"An unexpected error occurred: {e}")
         return [], []
     
     # Print statistics
     from collections import Counter
     label_counts = Counter(y_tags)
-    print(f"\n✅ Loaded {len(X_words)} samples")
+    print(f"\nLoaded {len(X_words)} samples")
     if apply_rule_corrections:
         print(f"🔧 Applied {corrections_count} rule-based corrections ({corrections_count/len(X_words)*100:.1f}%)")
-    print(f"📊 Label distribution:")
+    print(f"Label distribution:")
     for label in TARGET_LABELS:
         count = label_counts[label]
         pct = (count / len(y_tags) * 100) if y_tags else 0
