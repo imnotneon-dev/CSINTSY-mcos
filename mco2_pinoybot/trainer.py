@@ -47,6 +47,11 @@ ENG_SUFFIXES = (
     'ical', 'er', 'est', 'ize', 'ise', 'ity', 'ty'
 )
 
+#letters not found in fil?
+ENG_STRONG_LETTERS = set("qxz")        #like MOST LIKELY ENGLISH
+ENG_SOFT_LETTERS   = set("vfjc")       #MIGHT APPEAR IN FIL WORDS
+
+
 OTH_ABBREVIATION_CLUES = {
     'IMO', 'LOL', 'ASAP', 'AFAIK', 'IDK', 'BTW', 'JK', 'BRB', 'DIY', 'TLDR'
 }
@@ -156,6 +161,26 @@ def check_if_filipino(word: str) -> Optional[str]:
     
     return None
 
+def check_if_english_letters(word: str) -> Optional[str]:
+ 
+    # Returns 'ENG' if confident.
+ 
+    if not word or len(word) < 2:
+        return None
+
+    w = word.lower()
+
+    # Strong clue
+    if any(ch in ENG_STRONG_LETTERS for ch in w):
+        return 'ENG'
+
+    # Softer clue
+    # Require length > 3 and no Filipino prefix/suffix match to reduce false positives
+    if any(ch in ENG_SOFT_LETTERS for ch in w) and len(w) > 3:
+        if not any(w.startswith(fp) for fp in FIL_PREFIXES) and not any(w.endswith(fs) for fs in FIL_SUFFIXES):
+            return 'ENG'
+
+    return None
 
 def check_if_english(word: str) -> Optional[str]:
     """
@@ -211,6 +236,11 @@ def apply_rules(word: str) -> Optional[str]:
     fil_result = check_if_filipino(word)
     if fil_result:
         return 'FIL'
+
+    # 3.5 English-letter hint (between FIL morphology and full ENG morphology)
+    eng_hint = check_if_english_letters(word)
+    if eng_hint:
+        return eng_hint
     
     # 4. Finally check English Morphology (lowest priority)
     eng_result = check_if_english(word)
