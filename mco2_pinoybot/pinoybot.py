@@ -147,7 +147,7 @@ if __name__ == "__main__":
     example_tokens_1 = ["Gusto", "ko", "mag-compute", "ng", "2024", "."]
     tags_1 = tag_language(example_tokens_1)
     print(f"Tokens 1: {example_tokens_1}")
-    print(f"Expected Tags 1: ['FIL', 'FIL', 'OTH', 'FIL', 'OTH', 'OTH']")
+    print(f"Expected Tags 1: ['FIL', 'FIL', 'FIL', 'FIL', 'OTH', 'OTH']")
     print(f"Predicted Tags 1: {tags_1}")
 
     print("\n-------------------------------------------------\n")
@@ -172,7 +172,7 @@ if __name__ == "__main__":
     example_tokens_4 = ["Question", ",", "should", "we", "go", "to", "the", "mall", "sa", "Sabado", "para", "mag-shopping", "pare", "?"]
     tags_4 = tag_language(example_tokens_4)
     print(f"\nTokens 4: {example_tokens_4}")
-    print("Expected Tags 4: ['ENG', 'OTH', 'ENG', 'ENG', 'ENG', 'ENG', 'ENG', 'ENG', 'FIL', 'FIL', 'FIL', 'OTH', 'FIL', 'OTH']")
+    print("Expected Tags 4: ['ENG', 'OTH', 'ENG', 'ENG', 'ENG', 'ENG', 'ENG', 'ENG', 'FIL', 'FIL', 'FIL', 'FIL', 'FIL', 'OTH']")
     print(f"Predicted Tags 4: {tags_4}")
 
     print("\n-------------------------------------------------\n")
