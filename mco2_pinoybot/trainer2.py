@@ -31,7 +31,7 @@ ENG_BIGRAM_CLUES = {
 }
 
 FIL_BIGRAM_CLUES = {
-    'ng', 'mg', 'ny', 'ky', 'qu'  # you can add more if needed
+    'ng', 'mg'  # you can add more if needed
 }
 
 # Expressions/interjections classified as OTH

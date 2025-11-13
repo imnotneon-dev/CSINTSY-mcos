@@ -70,6 +70,16 @@ ENG_KNOWN_WORDS = {
     'today', 'tomorrow', 'yesterday', 'always', 'never', 'because', 'maybe'
 }
 
+ENG_BIGRAM_CLUES = {
+    'th', 'sh', 'ch', 'ph', 'wh', 'ck', 'st', 'tr', 'dr', 'pr',
+    'pl', 'cl', 'gl', 'fl', 'bl', 'br', 'cr', 'gr'
+}
+
+FIL_BIGRAM_CLUES = {
+    'ng', 'mg' # you can add more if needed
+}
+
+
 # ==============================
 # RULE-BASED CHECKS
 # ==============================
@@ -124,6 +134,15 @@ def check_if_english_letters(word: str) -> Optional[str]:
         return 'ENG'
     return None
 
+def check_if_filipino_bigrams(word: str) -> Optional[str]:
+    if not word or len(word) < 2:
+        return None
+    w = word.lower()
+    for bg in FIL_BIGRAM_CLUES:
+        if bg in w:
+            return 'FIL'
+    return None
+
 def check_if_english(word: str) -> Optional[str]:
     if not word or len(word) < 3:
         return None
@@ -136,21 +155,44 @@ def check_if_english(word: str) -> Optional[str]:
             return 'ENG'
     return None
 
+def check_if_english_bigrams(word: str) -> Optional[str]:
+    if not word or len(word) < 3:
+        return None
+    w = word.lower()
+    for bg in ENG_BIGRAM_CLUES:
+        if bg in w:
+            return 'ENG'
+    return None
+
 def apply_rules(word: str) -> Optional[str]:
+    """Apply rule-based classification."""
     if not word:
         return None
+    word = word.strip()
+    if not word:
+        return None
+    
+    # 1. Other (highest priority)
     if check_if_other(word):
         return 'OTH'
-    kw = check_if_known(word)
-    if kw:
-        return kw
+    # 2. Known words
+    known = check_if_known(word)
+    if known:
+        return known
+    # 3b. Filipino bigrams
+    fil_bg = check_if_filipino_bigrams(word)
+    if fil_bg:
+        return fil_bg
+    # 4. English bigrams
+    bigram = check_if_english_bigrams(word)
+    if bigram:
+        return bigram
+    # 3. Filipino clues: double vowels or reduplication
     fil = check_if_filipino(word)
     if fil:
         return fil
-    eng_hint = check_if_english_letters(word)
-    if eng_hint:
-        return eng_hint
-    eng = check_if_english(word)
+    # 5. English letters
+    eng = check_if_english_letters(word)
     if eng:
         return eng
     return None
