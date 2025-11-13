@@ -2,7 +2,6 @@ import csv
 import pickle
 import os
 import re
-import numpy as np
 from typing import List, Tuple, Optional
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
