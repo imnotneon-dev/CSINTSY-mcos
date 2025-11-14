@@ -59,16 +59,16 @@ OTH_EXPRESSION_CLUES = {
 
 FIL_DOUBLE_VOWELS_CLUES = {'aa', 'ii', 'uu'}
 
-FIL_KNOWN_WORDS = {
-    'sige', 'opo', 'po', 'naman', 'kasi', 'grabe', 'hay', 'naku', 'talaga',
-    'pala', 'daw', 'din', 'rin', 'lang', 'ulit', 'muna', 'nga', 'tayo', 'sila',
-    'siya', 'ako', 'ikaw', 'mo', 'ko'
-}
+# FIL_KNOWN_WORDS = {
+#     'sige', 'opo', 'po', 'naman', 'kasi', 'grabe', 'hay', 'naku', 'talaga',
+#     'pala', 'daw', 'din', 'rin', 'lang', 'ulit', 'muna', 'nga', 'tayo', 'sila',
+#     'siya', 'ako', 'ikaw', 'mo', 'ko'
+# }
 
-ENG_KNOWN_WORDS = {
-    'project', 'is', 'a', 'study', 'happy', 'sad', 'love', 'hate', 'after', 'before',
-    'today', 'tomorrow', 'yesterday', 'always', 'never', 'because', 'maybe'
-}
+# ENG_KNOWN_WORDS = {
+#     'project', 'is', 'a', 'study', 'happy', 'sad', 'love', 'hate', 'after', 'before',
+#     'today', 'tomorrow', 'yesterday', 'always', 'never', 'because', 'maybe'
+# }
 
 ENG_BIGRAM_CLUES = {
     'th', 'sh', 'ch', 'ph', 'wh', 'ck', 'st', 'tr', 'dr', 'pr',
@@ -84,13 +84,13 @@ FIL_BIGRAM_CLUES = {
 # RULE-BASED CHECKS
 # ==============================
 
-def check_if_known(word: str) -> Optional[str]:
-    w = word.lower()
-    if w in FIL_KNOWN_WORDS:
-        return 'FIL'
-    if w in ENG_KNOWN_WORDS:
-        return 'ENG'
-    return None
+# def check_if_known(word: str) -> Optional[str]:
+#     w = word.lower()
+#     if w in FIL_KNOWN_WORDS:
+#         return 'FIL'
+#     if w in ENG_KNOWN_WORDS:
+#         return 'ENG'
+#     return None
 
 def check_if_other(word: str) -> bool:
     if not word:
@@ -176,9 +176,9 @@ def apply_rules(word: str) -> Optional[str]:
     if check_if_other(word):
         return 'OTH'
     # 2. Known words
-    known = check_if_known(word)
-    if known:
-        return known
+    # known = check_if_known(word)
+    # if known:
+    #     return known
     # 3b. Filipino bigrams
     fil_bg = check_if_filipino_bigrams(word)
     if fil_bg:
