@@ -92,6 +92,25 @@ FIL_BIGRAM_CLUES = {
 #         return 'ENG'
 #     return None
 
+def check_if_name_entity(word: str, position_in_sentence: int = 0) -> Optional[str]:
+    
+    if not word:
+        return None
+
+    # Ignore first word of a sentence
+    if position_in_sentence == 0:
+        return None
+
+    # Capitalized word not at start
+    if word[0].isupper():
+        # Optional: exclude single-letter words like "I" or "A"
+        if len(word) > 1:
+            return 'OTH'
+
+    return None
+
+
+
 def check_if_other(word: str) -> bool:
     if not word:
         return True
@@ -164,7 +183,7 @@ def check_if_english_bigrams(word: str) -> Optional[str]:
             return 'ENG'
     return None
 
-def apply_rules(word: str) -> Optional[str]:
+def apply_rules(word: str, position_in_sentence: int = 0) -> Optional[str]:
     """Apply rule-based classification."""
     if not word:
         return None
@@ -175,6 +194,10 @@ def apply_rules(word: str) -> Optional[str]:
     # 1. Other (highest priority)
     if check_if_other(word):
         return 'OTH'
+    
+    name_entity = check_if_name_entity(word, position_in_sentence)
+    if name_entity:
+        return name_entity
     # 2. Known words
     # known = check_if_known(word)
     # if known:
