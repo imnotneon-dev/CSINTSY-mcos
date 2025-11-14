@@ -14,22 +14,18 @@ import numpy as np
 from typing import List, Any
 from trainer import apply_rules
 
-# define file paths (just constant strings here)
 MODEL_PATH = 'pinoybot_model.pkl'
 VECTORIZER_PATH = 'pinoybot_vectorizer.pkl'
 
-# global variables to store the loaded model and vectorizer
 _MODEL: Any = None
 _VECTORIZER: Any = None
 
-# helper function to load model and vectorizer
 def _load_resources():
     global _MODEL, _VECTORIZER
     
     if _MODEL is not None and _VECTORIZER is not None:
         return
     
-    # loading model
     if os.path.exists(MODEL_PATH):
         try:
             with open(MODEL_PATH, 'rb') as f:
@@ -38,7 +34,6 @@ def _load_resources():
         except Exception as e:
             print(f"Error loading model: {e}")
             
-    # loading vectorizer
     if os.path.exists(VECTORIZER_PATH):
         try:
             with open(VECTORIZER_PATH, 'rb') as f:
@@ -50,15 +45,7 @@ def _load_resources():
     if _MODEL is None or _VECTORIZER is None:
         print("WARNING: Model or vectorizer did not load properly.")
 
-# Main tagging function
 def tag_language(tokens: List[str]) -> List[str]:
-    """
-    Tags each token in the input list with its predicted language.
-    Args:
-        tokens: List of word tokens (strings).
-    Returns:
-        tags: List of predicted tags ("ENG", "FIL", or "OTH"), one per token.
-    """
     # 1. Load your trained model from disk (e.g., using pickle or joblib)
     #    Example: with open('trained_model.pkl', 'rb') as f: model = pickle.load(f)
     #    (Replace with your actual model loading code)
@@ -70,23 +57,18 @@ def tag_language(tokens: List[str]) -> List[str]:
     if not tokens:
         return []
     
-    # to store results
     predicted_tags = []
-    model_tokens = []        # Tokens sent to the model
-    model_features = None    # TF-IDF vectors
-    model_predictions = []   # Model’s predicted labels
+    model_tokens = []       
+    model_features = None    
+    model_predictions = []  
 
-    # apply rules first (from trainer.py)
     for token in tokens:
         rule_tag = apply_rules(token)
-
-        # confident rule classification
         if rule_tag in ('OTH', 'FIL', 'ENG'):
             predicted_tags.append(rule_tag)
         else:
-            # model handles uncertain tags
             model_tokens.append(token)
-            predicted_tags.append(None)  # placeholder
+            predicted_tags.append(None) 
     
     # 2. Extract features from the input tokens to create the feature matrix
     #    Example: features = ... (your feature extraction logic here)
@@ -105,34 +87,34 @@ def tag_language(tokens: List[str]) -> List[str]:
                 pred_index += 1
 
         # debugging purposes: show active features for each token
-        np.set_printoptions(threshold=np.inf, linewidth=np.inf)
-        features_dense = features.toarray()
-        feature_names = _VECTORIZER.get_feature_names_out()
+        # np.set_printoptions(threshold=np.inf, linewidth=np.inf)
+        # features_dense = features.toarray()
+        # feature_names = _VECTORIZER.get_feature_names_out()
 
-        print("\n--- Feature Analysis (Active N-Grams and Predictions) ---")
-        print(f"Total Words Tested: {len(tokens)}")
-        print(f"Total Features Learned: {len(feature_names)}\n")
+        # print("\n--- Feature Analysis (Active N-Grams and Predictions) ---")
+        # print(f"Total Words Tested: {len(tokens)}")
+        # print(f"Total Features Learned: {len(feature_names)}\n")
 
-        for word, vector, tag in zip(tokens, features_dense, predicted_tags):
-            non_zero_indices = np.nonzero(vector)[0]
+        # for word, vector, tag in zip(tokens, features_dense, predicted_tags):
+        #     non_zero_indices = np.nonzero(vector)[0]
 
-            print("=========================================================")
-            print(f"| TOKEN: '{word}' | PREDICTED CLASS: {tag}")
-            print("=========================================================")
+        #     print("=========================================================")
+        #     print(f"| TOKEN: '{word}' | PREDICTED CLASS: {tag}")
+        #     print("=========================================================")
 
-            if len(non_zero_indices) == 0:
-                print("  [No active features found among the learned N-grams.]")
-            else:
-                print("  [Active Features (N-Grams) and their TF-IDF Scores]:")
-                for i in non_zero_indices:
-                    feature_name = feature_names[i]
-                    feature_score = vector[i]
-                    print(f"  -> '{feature_name}' (Score: {feature_score:.4f})")
+        #     if len(non_zero_indices) == 0:
+        #         print("  [No active features found among the learned N-grams.]")
+        #     else:
+        #         print("  [Active Features (N-Grams) and their TF-IDF Scores]:")
+        #         for i in non_zero_indices:
+        #             feature_name = feature_names[i]
+        #             feature_score = vector[i]
+        #             print(f"  -> '{feature_name}' (Score: {feature_score:.4f})")
 
-        print("-------------------------------------------------\n")
-        np.set_printoptions(threshold=1000, linewidth=75)
+        # print("-------------------------------------------------\n")
+        # np.set_printoptions(threshold=1000, linewidth=75)
     
-    predicted = _MODEL.predict(features)
+    # predicted = _MODEL.predict(features)
     # Convert numpy string objects to normal Python strings
     predicted_tags = [str(tag) for tag in predicted_tags]
     
@@ -140,54 +122,3 @@ def tag_language(tokens: List[str]) -> List[str]:
 
 if __name__ == "__main__":
     _load_resources()
-
-    print("\n-------------------------------------------------\n")
-    print("TEST CASE 1:")
-
-    example_tokens_1 = ["Gusto", "ko", "mag-compute", "ng", "2024", "."]
-    tags_1 = tag_language(example_tokens_1)
-    print(f"Tokens 1: {example_tokens_1}")
-    print(f"Expected Tags 1: ['FIL', 'FIL', 'FIL', 'FIL', 'OTH', 'OTH']")
-    print(f"Predicted Tags 1: {tags_1}")
-
-    print("\n-------------------------------------------------\n")
-    print("TEST CASE 2:")
-
-    example_tokens_2 = ["Si", "Dr", "dela", "Cruz", "is", "a", "good", "Filipino", "teacher", "."]
-    tags_2 = tag_language(example_tokens_2)
-    print(f"\nTokens 2: {example_tokens_2}")
-    print("Expected Tags 2: ['FIL', 'ENG', 'OTH', 'OTH', 'ENG', 'ENG', 'ENG', 'ENG', 'ENG', 'OTH']")
-    print(f"Predicted Tags 2: {tags_2}")
-
-    print("\n-------------------------------------------------\n")
-    print("TEST CASE 3:")
-    example_tokens_3 = ["Hello", "kumusta", "ka", "ngayon", "?"]
-    tags_3 = tag_language(example_tokens_3)
-    print(f"\nTokens 3: {example_tokens_3}")
-    print("Expected Tags 3: ['ENG', 'FIL', 'FIL', 'FIL', 'OTH']")
-    print(f"Predicted Tags 3: {tags_3}")
-
-    print("\n-------------------------------------------------\n")
-    print("TEST CASE 4:")
-    example_tokens_4 = ["Question", ",", "should", "we", "go", "to", "the", "mall", "sa", "Sabado", "para", "mag-shopping", "pare", "?"]
-    tags_4 = tag_language(example_tokens_4)
-    print(f"\nTokens 4: {example_tokens_4}")
-    print("Expected Tags 4: ['ENG', 'OTH', 'ENG', 'ENG', 'ENG', 'ENG', 'ENG', 'ENG', 'FIL', 'FIL', 'FIL', 'FIL', 'FIL', 'OTH']")
-    print(f"Predicted Tags 4: {tags_4}")
-
-    print("\n-------------------------------------------------\n")
-    print("TEST CASE 5:")
-    example_tokens_5 = ["Naging", "nagging", "mom", "ang", "ina", "kong", "si", "magnet", "whose", "favorite", "food", "is", "spaghetti", "."]
-    tags_5 = tag_language(example_tokens_5)
-    print(f"\nTokens 5: {example_tokens_5}")
-    print("Expected Tags 5: ['FIL', 'ENG', 'ENG', 'FIL', 'FIL', 'FIL', 'FIL', 'ENG', 'ENG', 'ENG', 'ENG', 'ENG', 'ENG', 'OTH']")
-    print(f"Predicted Tags 5: {tags_5}")
-
-    print("\n-------------------------------------------------\n")
-    print("TEST CASE 6:")
-    example_tokens_6 = ["Si", "Juan", "Dela", "Cruz", "Ay", "Isang", "Magaling", "Na", "Doctor", "."]
-    tags_6 = tag_language(example_tokens_6)
-    print(f"\nTokens 6: {example_tokens_6}")
-    print("Expected Tags 6: ['FIL', 'OTH', 'OTH', 'OTH', 'FIL', 'FIL', 'FIL', 'FIL', 'ENG', 'OTH']")
-    print(f"Predicted Tags 6: {tags_6}")
-
