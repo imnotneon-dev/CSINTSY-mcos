@@ -9,11 +9,13 @@ from cat_env import make_env
 # TODO: YOU MAY ADD ADDITIONAL IMPORTS OR FUNCTIONS HERE.                   #
 #############################################################################
 
-
-
-
-
-
+def get_reward(done, info):
+    if done and info.get("caught", False):
+        return 100      # caught the cat!
+    elif done and info.get("timeout", False):
+        return -50      # failed to catch
+    else:
+        return -1       # small negative reward to encourage faster catching
 
 
 #############################################################################
@@ -38,18 +40,13 @@ def train_bot(cat_name, render: int = -1):
     # Hint: You may want to declare variables for the hyperparameters of the    #
     # training process such as learning rate, exploration rate, etc.            #
     #############################################################################
-    
-    
 
+    alpha = 0.1          # learning rate
+    gamma = 0.9          # discount factor
+    epsilon = 1.0        # exploration rate
+    epsilon_min = 0.05   # lowest epsilon allowed
+    epsilon_decay = 0.999  # slow decay
 
-
-
-
-
-
-
-
-    
     #############################################################################
     # END OF YOUR CODE. DO NOT MODIFY ANYTHING BEYOND THIS LINE.                #
     #############################################################################
@@ -66,38 +63,27 @@ def train_bot(cat_name, render: int = -1):
         # 5. Update the Q-table accordingly based on agent's rewards.                #
         ############################################################################## 
                
-        
+        state, info = env.reset()
+        done = False
 
+        while not done:
+            if random.random() < epsilon:
+                action = env.action_space.sample()     
+            else:
+                action = np.argmax(q_table[state])     
 
+            next_state, _, done, _, info = env.step(action)
 
+            reward = get_reward(done, info)
 
+            best_next = np.max(q_table[next_state])
+            q_table[state][action] = q_table[state][action] + alpha * (
+                reward + gamma * best_next - q_table[state][action]
+            )
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        
+            state = next_state
+            
+        epsilon = max(epsilon_min, epsilon * epsilon_decay)
         
         #############################################################################
         # END OF YOUR CODE. DO NOT MODIFY ANYTHING BEYOND THIS LINE.                #
