@@ -11,11 +11,11 @@ from cat_env import make_env
 
 def get_reward(done, info):
     if done and info.get("caught", False):
-        return 100      # caught the cat!
+        return 100     
     elif done and info.get("timeout", False):
-        return -50      # failed to catch
+        return -50      
     else:
-        return -1       # small negative reward to encourage faster catching
+        return -1     
 
 
 #############################################################################
