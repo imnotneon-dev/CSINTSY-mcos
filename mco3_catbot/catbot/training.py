@@ -9,14 +9,41 @@ from cat_env import make_env
 # TODO: YOU MAY ADD ADDITIONAL IMPORTS OR FUNCTIONS HERE.                   #
 #############################################################################
 
-def get_reward(done, info):
-    if done and info.get("caught", False):
-        return 100     
-    elif done and info.get("timeout", False):
-        return -50      
-    else:
-        return -1     
+def manhattan(state):
+    ar = state // 1000
+    ac = (state // 100) % 10
+    cr = (state // 10) % 10
+    cc = state % 10
+    return abs(ar - cr) + abs(ac - cc)
 
+def get_reward(prev_state, next_state, action, done, info):
+    # Terminal rewards
+    if done and info.get("caught", False):
+        return 100.0
+    elif done and info.get("timeout", False):
+        return -75.0
+    
+    reward = 0.0
+
+    # Small step penalty
+    reward -= 0.05
+
+    # Distance shaping
+    prev_d = manhattan(prev_state)
+    next_d = manhattan(next_state)
+
+    if next_d < prev_d:
+        reward += 2.5
+    elif next_d == prev_d:
+        reward -= 0.2
+    else:
+        reward -= 2.0
+
+    # Wall penalty (tried to move but nothing changed)
+    if next_state == prev_state and action != 4:
+        reward -= 3.0
+
+    return reward   
 
 #############################################################################
 # END OF YOUR CODE. DO NOT MODIFY ANYTHING BEYOND THIS LINE.                #
@@ -47,6 +74,10 @@ def train_bot(cat_name, render: int = -1):
     epsilon_min = 0.05   # lowest epsilon allowed
     epsilon_decay = 0.999  # slow decay
 
+    # For shaping without adding functions outside allowed area:
+    # We store previous Manhattan distance temporarily during training.
+    prev_distance = 0
+
     #############################################################################
     # END OF YOUR CODE. DO NOT MODIFY ANYTHING BEYOND THIS LINE.                #
     #############################################################################
@@ -67,22 +98,23 @@ def train_bot(cat_name, render: int = -1):
         done = False
 
         while not done:
+            # Epsilon-greedy
             if random.random() < epsilon:
-                action = env.action_space.sample()     
+                action = env.action_space.sample()
             else:
-                action = np.argmax(q_table[state])     
+                action = np.argmax(q_table[state])
 
             next_state, _, done, _, info = env.step(action)
 
-            reward = get_reward(done, info)
+            # FIXED — correct shaped reward call
+            reward = get_reward(state, next_state, action, done, info)
 
+            # Q-learning update
             best_next = np.max(q_table[next_state])
-            q_table[state][action] = q_table[state][action] + alpha * (
-                reward + gamma * best_next - q_table[state][action]
-            )
+            q_table[state][action] += alpha * (reward + gamma * best_next - q_table[state][action])
 
             state = next_state
-            
+
         epsilon = max(epsilon_min, epsilon * epsilon_decay)
         
         #############################################################################
