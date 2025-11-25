@@ -260,16 +260,21 @@ class TrainerCat(Cat):
     """
     def _get_sprite_path(self) -> str:
         return "images/trainer-dp.png"
-    
+
     def move(self) -> None:
-        # Students can implement their own cat behavior here
-        # This is a dummy implementation that stays still
-        # You can:
-        # 1. Access player information (position, last action)
-        # 2. Check distances
-        # 3. Implement your own movement strategy
-        # 4. Test different learning algorithms
-        return
+        skip = random.choice([1, 2, 3])
+
+        # Pick a random direction: up, down, left, right
+        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        dr, dc = random.choice(directions)
+
+        # Apply skip in the chosen direction
+        new_r = self.pos[0] + dr * skip
+        new_c = self.pos[1] + dc * skip
+
+        # Clamp to grid boundaries
+        self.pos[0] = max(0, min(self.grid_size - 1, new_r))
+        self.pos[1] = max(0, min(self.grid_size - 1, new_c))
 
 #######################################
 # END OF CAT BEHAVIOR IMPLEMENTATIONS #

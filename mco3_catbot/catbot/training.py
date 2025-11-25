@@ -9,18 +9,23 @@ from cat_env import make_env
 # TODO: YOU MAY ADD ADDITIONAL IMPORTS OR FUNCTIONS HERE.                   #
 #############################################################################
 
-def manhattan(state):
-    ar = state // 1000
-    ac = (state // 100) % 10
-    cr = (state // 10) % 10
-    cc = state % 10
-    return abs(ar - cr) + abs(ac - cc)
+MANHATTAN_CACHE = np.zeros(10000, dtype=int)
+for s in range(10000):
+    ar = s // 1000
+    ac = (s // 100) % 10
+    cr = (s // 10) % 10
+    cc = s % 10
+    MANHATTAN_CACHE[s] = abs(ar - cr) + abs(ac - cc)
 
-def get_reward(prev_state, next_state, action, done, info):
+def manhattan(state):
+    return MANHATTAN_CACHE[state]
+
+
+def get_reward(prev_state, next_state, action, done, runtime):
     # Terminal rewards
-    if done and info.get("caught", False):
+    if done and not runtime:
         return 100.0
-    elif done and info.get("timeout", False):
+    elif runtime:
         return -75.0
     
     reward = 0.0
@@ -69,14 +74,11 @@ def train_bot(cat_name, render: int = -1):
     #############################################################################
 
     alpha = 0.1          # learning rate
-    gamma = 0.9          # discount factor
+    gamma = 0.99         # discount factor
     epsilon = 1.0        # exploration rate
-    epsilon_min = 0.05   # lowest epsilon allowed
-    epsilon_decay = 0.999  # slow decay
-
-    # For shaping without adding functions outside allowed area:
-    # We store previous Manhattan distance temporarily during training.
-    prev_distance = 0
+    epsilon_min = 0.01   # lowest epsilon allowed
+    epsilon_max = 1
+    epsilon_decay = 0.01  # fast decay
 
     #############################################################################
     # END OF YOUR CODE. DO NOT MODIFY ANYTHING BEYOND THIS LINE.                #
@@ -94,8 +96,10 @@ def train_bot(cat_name, render: int = -1):
         # 5. Update the Q-table accordingly based on agent's rewards.                #
         ############################################################################## 
                
-        state, info = env.reset()
+        state = env.reset()
         done = False
+        if isinstance(state, tuple):
+                state = state[0]
 
         while not done:
             # Epsilon-greedy
@@ -104,10 +108,13 @@ def train_bot(cat_name, render: int = -1):
             else:
                 action = np.argmax(q_table[state])
 
-            next_state, _, done, _, info = env.step(action)
+            next_state, _, done, runtime, info = env.step(action)
+
+            if isinstance(state, tuple):
+                state = state[0]
 
             # FIXED — correct shaped reward call
-            reward = get_reward(state, next_state, action, done, info)
+            reward = get_reward(state, next_state, action, done, runtime)
 
             # Q-learning update
             best_next = np.max(q_table[next_state])
@@ -115,7 +122,7 @@ def train_bot(cat_name, render: int = -1):
 
             state = next_state
 
-        epsilon = max(epsilon_min, epsilon * epsilon_decay)
+        epsilon = epsilon_min + (epsilon_max - epsilon_min) * np.exp(-epsilon_decay * ep)
         
         #############################################################################
         # END OF YOUR CODE. DO NOT MODIFY ANYTHING BEYOND THIS LINE.                #
