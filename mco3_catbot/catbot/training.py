@@ -73,12 +73,12 @@ def train_bot(cat_name, render: int = -1):
     # training process such as learning rate, exploration rate, etc.            #
     #############################################################################
 
-    alpha = 0.1          # learning rate
-    gamma = 0.99         # discount factor
+    alpha = 0.15          # learning rate
+    gamma = 0.98         # discount factor
     epsilon = 1.0        # exploration rate
-    epsilon_min = 0.01   # lowest epsilon allowed
+    epsilon_min = 0.05   # lowest epsilon allowed
     epsilon_max = 1
-    epsilon_decay = 0.01  # fast decay
+    epsilon_decay = 0.002  # fast decay
 
     #############################################################################
     # END OF YOUR CODE. DO NOT MODIFY ANYTHING BEYOND THIS LINE.                #
@@ -122,7 +122,7 @@ def train_bot(cat_name, render: int = -1):
 
             state = next_state
 
-        epsilon = epsilon_min + (epsilon_max - epsilon_min) * np.exp(-epsilon_decay * ep)
+        epsilon = max(epsilon_min, epsilon * np.exp(-epsilon_decay))
         
         #############################################################################
         # END OF YOUR CODE. DO NOT MODIFY ANYTHING BEYOND THIS LINE.                #
