@@ -77,7 +77,6 @@ def train_bot(cat_name, render: int = -1):
     gamma = 0.98         # discount factor
     epsilon = 1.0        # exploration rate
     epsilon_min = 0.05   # lowest epsilon allowed
-    epsilon_max = 1
     epsilon_decay = 0.002  # fast decay
 
     #############################################################################
